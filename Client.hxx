@@ -1,8 +1,7 @@
 #ifndef _HEADER_CLIENT_
 #define _HEADER_CLIENT_
 
-#include "socks5.hxx"
-#include "Socks5Impl.hxx"
+#include "GlobalContext.hxx"
 #include <spdlog/spdlog.h>
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
@@ -10,18 +9,28 @@
 #include <cstddef>
 #include <memory>
 #include <vector>
+#include <set>
 
-class MauryaClientContext {
+class MauryaClientContext;
+class SOCKSClientListener;
+class SOCKSClientConnection;
+
+class MauryaClientContext : public GlobalObject {
 private:
-  asio::io_context asioContext;
+  GlobalContext &globalContext;
+  std::unique_ptr<SOCKSClientListener> proxyListener;
+  std::set<std::unique_ptr<SOCKSClientConnection>> clientConnections;
+
 public:
-  MauryaClientContext() { }
-  void run() {
-    asioContext.run();
+  MauryaClientContext(GlobalContext &globalContext);
+  void addClientConnection(std::unique_ptr<SOCKSClientConnection> conn);
+
+  SOCKSClientListener *getProxyListener() {
+    return proxyListener.get();
   }
 
   asio::io_context& getASIOContext() {
-    return asioContext;
+    return globalContext.getGlobalASIOContext();
   }
 };
 
@@ -44,35 +53,16 @@ public:
     return asioTCPSocket;
   }
 
-  void run() {
-    this->readClientIdent();
-  }
+  void run();
 
   void reportError(const std::string& message) {
 
-  }
-
-  void readClientIdent() {
-    assert(state == CLIENT_INIT);
-    socks5_impl::readClientIdent(
-        asioTCPSocket, [this](const asio::error_code &err) {
-          socks5_impl::readClientCommand(
-              asioTCPSocket, [this](const asio::error_code &err,
-                                    const std::optional<socks5::Command> &maybeCmd) {
-                if (err)
-                  return spdlog::error(err.message());
-                auto cmd = maybeCmd.value();
-                spdlog::info("client ident read {} {} {}", cmd.kind, cmd.address.dump(),
-                             cmd.port);
-              });
-        });
   }
 };
 
 class SOCKSClientListener {
 private:
   MauryaClientContext &ctx;
-  std::vector<std::shared_ptr<SOCKSClientConnection>> connections;
   asio::ip::tcp::acceptor asioAcceptor;
 
 public:
@@ -81,20 +71,8 @@ public:
         asioAcceptor(ctx.getASIOContext(),
                      asio::ip::tcp::endpoint(asio::ip::tcp::v4(), 2030)) {}
 
-  void startListen() {
-    std::shared_ptr<SOCKSClientConnection> conn =
-        std::make_shared<SOCKSClientConnection>(ctx);
-    asioAcceptor.async_accept(conn->getASIOTCPSocket(),
-                              [this, conn](const asio::error_code &err) {
-                                if (err) {
-                                  spdlog::error(err.message());
-                                } else {
-                                  connections.push_back(conn);
-                                  conn->run();
-                                }
-                                this->startListen();
-                              });
-  }
+  void startListen();
+
 };
 
 #endif

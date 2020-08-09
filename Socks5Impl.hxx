@@ -72,19 +72,19 @@ auto readClientIdent(asio::ip::tcp::socket &socket, CompletionToken &&token) {
                 if (err)
                   return callback(err);
                 if (std::find(authMethodBuf->begin(), authMethodBuf->end(),
-                              static_cast<std::byte>(0x00)) !=
-                    authMethodBuf->end()) {
+                              static_cast<std::byte>(0x00)) ==
+                    authMethodBuf->end())
+                  return callback({ERR_UNSUPPORTED_OPERATION, errorCategory});
 
-                  std::shared_ptr<std::array<std::byte, 2>> authRespBuf =
-                      std::make_shared<std::array<std::byte, 2>>();
-                  (*authRespBuf) = {socks5::VER, static_cast<std::byte>(0x00)};
-                  asio::async_write(
-                      socket, asio::buffer(*authRespBuf),
-                      [&socket, callback](const asio::error_code &err,
-                                          size_t bytesTransferred) {
-                        return callback(err);
-                      });
-                }
+                std::shared_ptr<std::array<std::byte, 2>> authRespBuf =
+                    std::make_shared<std::array<std::byte, 2>>();
+                (*authRespBuf) = {socks5::VER, static_cast<std::byte>(0x00)};
+                asio::async_write(
+                    socket, asio::buffer(*authRespBuf),
+                    [&socket, callback](const asio::error_code &err,
+                                        size_t bytesTransferred) {
+                      return callback(err);
+                    });
               });
         });
   };

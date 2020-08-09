@@ -1,0 +1,13 @@
+{
+  "decrees": [
+    {
+      "decree": "launchClient",
+      "specifics": {
+        "serverAddress": "127.0.0.1",
+        "serverPort": 2047,
+        "localAddress": "0.0.0.0",
+        "localPort": 2030
+      }
+    }
+  ]
+}
